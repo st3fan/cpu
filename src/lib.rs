@@ -50,14 +50,16 @@ impl CPU {
         }
     }
 
+    // TODO Needs test
     fn read_byte(&mut self) -> u8 {
         let b = self.mem[self.pc as usize];
         self.pc += 1;
         b
     }
 
+    // TODO Needs test
     fn read_word(&mut self) -> u16 {
-        (self.read_byte() as u16) << 8 | self.read_byte() as u16
+         self.read_byte() as u16 | (self.read_byte() as u16) << 8
     }
 
     fn push_byte(&mut self, b: u8) {
@@ -293,6 +295,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cpu_read_instructions() {
+        let mut cpu = CPU::new();
+        cpu.mem[0x0400] = 0xA9; // LDA #$42
+        cpu.mem[0x0401] = 0x42;
+        cpu.mem[0x0402] = 0x20; // JSR 0x1122
+        cpu.mem[0x0403] = 0x22;
+        cpu.mem[0x0404] = 0x11;
+        cpu.pc = 0x0400;
+        assert_eq!(0xA9, cpu.read_byte());
+        assert_eq!(0x0401, cpu.pc);
+        assert_eq!(0x42, cpu.read_byte());
+        assert_eq!(0x0402, cpu.pc);
+        assert_eq!(0x20, cpu.read_byte());
+        assert_eq!(0x0403, cpu.pc);
+        assert_eq!(0x1122, cpu.read_word());
+        assert_eq!(0x0405, cpu.pc);
+    }
+
+    #[test]
     fn load_and_store() {
         let mut cpu = CPU::new();
         cpu.mem[0x0400] = 0xA9; // LDA #$42
@@ -379,8 +400,8 @@ mod tests {
         let mut cpu = CPU::new();
         cpu.mem[0x0400] = 0xEA; // NOP
         cpu.mem[0x0401] = 0x20; // JSR 0x0405
-        cpu.mem[0x0402] = 0x04;
-        cpu.mem[0x0403] = 0x05;
+        cpu.mem[0x0402] = 0x05;
+        cpu.mem[0x0403] = 0x04;
         cpu.mem[0x0004] = 0x00; // BRK
         cpu.mem[0x0405] = 0xA2; // LDX #$65
         cpu.mem[0x0406] = 0x65;
