@@ -1,0 +1,27 @@
+name: Test
+
+permissions:
+  contents: read
+
+on: [push]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        channel:
+        - stable
+        - beta
+        - nightly
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+      - name: Setup (${{ matrix.channel }})
+        run: rustup default ${{ matrix.channel }}
+      - name: Test (${{ matrix.channel }})
+        run: cargo test
+
