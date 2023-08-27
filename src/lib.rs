@@ -2,6 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+use bitflags::bitflags;
+
 //
 // This is a 6502 emulator with the following memory layout:
 //
@@ -10,18 +12,18 @@
 //  0x0200 - 0x03ff RAM General Use
 //  0x0400 - 0x07ff ROM
 //
-// Only the following instructions have been implemented:
-//
-//  0x00             BRK
-//  0xA2  0xXX       LDX IMM
-//  0xA9  0xXX       LDA IMM
-//  0x85  0xXX       STA ZP
-//  0x86  0xXX       STX ZP
-//  0x20  0xLL 0xHH  JSR ABS
-//  0x60             RTS
-//  0xEA             NOP
-//  0xE6             INC ZP
-//
+
+bitflags! {
+    pub struct Status: u8 {
+        const N = 0b10000000;
+        const V = 0b01000000;
+        const B = 0b00010000;
+        const D = 0b00001000;
+        const I = 0b00000100;
+        const Z = 0b00000010;
+        const C = 0b00000001;
+    }
+}
 
 #[allow(dead_code)]
 struct CPU {
@@ -30,7 +32,7 @@ struct CPU {
     x: u8,
     y: u8,
     s: u8,
-    p: u8,
+    p: Status,
     mem: [u8; 2048],
 }
 
@@ -43,7 +45,7 @@ impl CPU {
             y: 0,
             pc: 0x0400,
             s: 0xff,
-            p: 0x00,
+            p: Status::empty(),
             mem: [0; 2048],
         }
     }
@@ -78,11 +80,109 @@ impl CPU {
         (self.pop_byte() as u16) | (self.pop_byte() as u16) << 8
     }
 
+    //
+
+    fn update_zn(&mut self, v: u8) {
+        self.p.set(Status::Z, v == 0);
+        self.p.set(Status::N, v & 0x80 == 0x80);
+    }
+
+    // Memory Getters
+
+    fn get_byte(&mut self, address: u16) -> u8 {
+        self.mem[address as usize]
+    }
+
+    fn get_byte_zpg(&mut self, address: u8) -> u8 {
+        self.mem[address as usize]
+    }
+
+    fn get_byte_zpgx(&mut self, address: u8) -> u8 {
+        self.mem[address.wrapping_add(self.x) as usize]
+    }
+
+    fn get_byte_zpgy(&mut self, address: u8) -> u8 {
+        self.mem[address.wrapping_add(self.y) as usize]
+    }
+
+    fn get_byte_abs(&mut self, address: u16) -> u8 {
+        self.mem[address as usize]
+    }
+
+    fn get_byte_absx(&mut self, address: u16) -> u8 {
+        self.mem[address.wrapping_add(self.x as u16) as usize]
+    }
+
+    fn get_byte_absy(&mut self, address: u16) -> u8 {
+        self.mem[address.wrapping_add(self.y as u16) as usize]
+    }
+
+    fn get_byte_xind(&mut self, address: u8) -> u8 {
+        let address = (self.get_byte_zpg(address.wrapping_add(1).wrapping_add(self.x)) as u16) << 8 | self.get_byte_zpg(address.wrapping_add(self.x)) as u16;
+        self.mem[address as usize]
+    }
+
+    fn get_byte_indy(&mut self, address: u8) -> u8 {
+        let address = (self.get_byte_zpg(address.wrapping_add(1)) as u16) << 8 | self.get_byte_zpg(address) as u16;
+        self.mem[address.wrapping_add(self.y as u16) as usize]
+    }
+
+    // Memory Setters
+
+    fn set_byte(&mut self, address: u16, v: u8) {
+        self.mem[address as usize] = v;
+    }
+
+    fn set_byte_zpg(&mut self, address: u8, v: u8) {
+        self.set_byte(address as u16, v);
+    }
+
+    fn set_byte_zpgx(&mut self, address: u8, v: u8) {
+        self.set_byte((address.wrapping_add(self.x)) as u16, v);
+    }
+
+    fn set_byte_zpgy(&mut self, address: u8, v: u8) {
+        self.set_byte((address.wrapping_add(self.y)) as u16, v);
+    }
+
+    fn set_byte_abs(&mut self, address: u16, v: u8) {
+        self.set_byte(address, v);
+    }
+
+    fn set_byte_absx(&mut self, address: u16, v: u8) {
+        self.set_byte(address.wrapping_add(self.x as u16), v);
+    }
+
+    fn set_byte_absy(&mut self, address: u16, v: u8) {
+        self.set_byte(address.wrapping_add(self.y as u16), v);
+    }
+
+    fn set_byte_xind(&mut self, address: u8, v: u8) {
+        let address = (self.get_byte_zpg(address.wrapping_add(1).wrapping_add(self.x)) as u16) << 8 | self.get_byte_zpg(address.wrapping_add(self.x)) as u16;
+        self.set_byte(address, v);
+    }
+
+    fn set_byte_indy(&mut self, address: u8, v: u8) {
+        let address: u16 = (self.get_byte_zpg(address.wrapping_add(1)) as u16) << 8 | self.get_byte_zpg(address) as u16;
+        self.set_byte(address.wrapping_add(self.y as u16), v);
+    }
+
+    // Word Shortcuts
+
+    fn get_word(&mut self, address: u16) -> u16 {
+        (self.get_byte(address.wrapping_add(1)) as u16) << 8 | self.get_byte(address) as u16
+    }
+      
+    fn set_word(&mut self, address: u16, v: u16) {
+        self.set_byte(address+0, v as u8);
+        self.set_byte(address+1, (v >> 8) as u8);
+    }     
+
+    //
+
     fn run(&mut self) {
         loop {
             let opcode = self.read_byte();
-
-            println!("Executing {:x}", opcode);
 
             match opcode {
                 0x00 => {
@@ -117,10 +217,65 @@ impl CPU {
                     self.x = self.read_byte();
                 }
 
+                // LDA
+
+                // LDA IMM
                 0xA9 => {
-                    // LDA IMM
-                    self.a = self.read_byte();
+                    let operand = self.read_byte();
+                    self.a = operand;
+                    self.update_zn(self.a);
                 }
+
+                // LDA ZP
+                0xA5 => {
+                    let operand = self.read_byte();
+                    self.a = self.get_byte_zpg(operand);
+                    self.update_zn(self.a)
+                }
+
+                // LDA ZP,X
+                0xB5 => {
+                    let operand = self.read_byte();
+                    self.a = self.get_byte_zpgx(operand);
+                    self.update_zn(self.a)
+                }
+
+                // LDA ABS
+                0xAD => {
+                    let operand = self.read_word();
+                    self.a = self.get_byte_abs(operand);
+                    self.update_zn(self.a)
+                }
+
+                // lDA ABS,X
+                0xBD => {
+                    let operand = self.read_word();
+                    self.a = self.get_byte_absx(operand);
+                    self.update_zn(self.a)
+                }
+
+                // LDA ABS,Y
+                0xB9 => {
+                    let operand = self.read_word();
+                    self.a = self.get_byte_absy(operand);
+                    self.update_zn(self.a)
+                }
+
+                // LDA (IND,X)
+                0xA1 => {
+                    let operand = self.read_byte();
+                    self.a = self.get_byte_xind(operand);
+                    self.update_zn(self.a)
+                }
+
+                // LDA (IND),Y
+                0xB1 => {
+                    let operand = self.read_byte();
+                    self.a = self.get_byte_indy(operand);
+                    self.update_zn(self.a)
+                }
+                  
+                //
 
                 0xEA => { // NOP
                 }
@@ -239,5 +394,232 @@ mod tests {
         cpu.run();
         assert_eq!(0x65, cpu.mem[0x0005]);
         assert_eq!(0x02, cpu.mem[0x0006]);
+    }
+
+    #[test]
+    fn n_is_set() {
+        let mut cpu = CPU::new();
+        cpu.mem[0x0400] = 0xA9; // LDA #$80
+        cpu.mem[0x0401] = 0x80;
+        cpu.mem[0x0402] = 0x00;
+        cpu.run();
+        assert!(cpu.p.contains(Status::N));
+        cpu.mem[0x0403] = 0xA9; // LDA #$7F
+        cpu.mem[0x0404] = 0x7F;
+        cpu.mem[0x0405] = 0x00;
+        cpu.run();
+        assert!(!cpu.p.contains(Status::N));
+    }
+
+    #[test]
+    fn z_is_set() {
+        let mut cpu = CPU::new();
+        cpu.mem[0x0400] = 0xA9; // LDA #$00
+        cpu.mem[0x0401] = 0x00;
+        cpu.mem[0x0402] = 0x00;
+        cpu.run();
+        assert!(cpu.p.contains(Status::Z));
+        cpu.mem[0x0403] = 0xA9; // LDA #$01
+        cpu.mem[0x0404] = 0x01;
+        cpu.mem[0x0405] = 0x00;
+        cpu.run();
+        assert!(!cpu.p.contains(Status::N));
+    }
+
+    fn new_test_cpu() -> CPU {
+        let mut cpu = CPU::new();
+        cpu.mem[0x0000] = 0x10;
+        cpu.mem[0x0001] = 0x11;
+        cpu.mem[0x0002] = 0x12;
+        cpu.mem[0x0003] = 0x13;
+        cpu.mem[0x0004] = 0x14;
+        cpu.mem[0x0005] = 0x15;
+        cpu.mem[0x0006] = 0x16;
+        cpu.mem[0x0007] = 0x17;
+
+        cpu.mem[0x0010] = 0x00;
+        cpu.mem[0x0011] = 0x00;
+        cpu.mem[0x0012] = 0x00;
+        cpu.mem[0x0013] = 0x0a;
+        cpu.mem[0x0014] = 0x04;
+
+        cpu.mem[0x00ff] = 0x2f;
+
+        cpu.mem[0x0400] = 0xEA; // NOP
+        cpu.mem[0x0401] = 0x20; // JSR 0x0405
+        cpu.mem[0x0402] = 0x04;
+        cpu.mem[0x0403] = 0x05;
+        cpu.mem[0x0004] = 0x00; // BRK
+        cpu.mem[0x0405] = 0xA2; // LDX #$65
+        cpu.mem[0x0406] = 0x65;
+        cpu.mem[0x0407] = 0x86; // STX $05
+        cpu.mem[0x0408] = 0x05;
+        cpu.mem[0x0409] = 0xA2; // LDX #$02
+        cpu.mem[0x040A] = 0x02;
+        cpu.mem[0x040B] = 0x86; // STX $06
+        cpu.mem[0x040C] = 0x06;
+        cpu.mem[0x040D] = 0x60; // RTS
+        cpu
+    }
+    
+    // Memory Accessors
+
+    #[test]
+    fn cpu_get_byte_zpg() {
+        let mut cpu = new_test_cpu();
+        assert_eq!(0x15, cpu.get_byte_zpg(0x05));
+    }
+
+    #[test]
+    fn cpu_get_byte_zpgx() {
+        let mut cpu = new_test_cpu();
+        cpu.x = 0x00;
+        assert_eq!(0x10, cpu.get_byte_zpgx(0x00));
+        cpu.x = 0x03;
+        assert_eq!(0x13, cpu.get_byte_zpgx(0x00));
+        cpu.x = 0x00;
+        assert_eq!(0x2f, cpu.get_byte_zpgx(0xff));
+        cpu.x = 0x03;
+        assert_eq!(0x12, cpu.get_byte_zpgx(0xff));
+        cpu.x = 0xff;
+        assert_eq!(0x2f, cpu.get_byte_zpgx(0x00));
+    }
+
+    #[test]
+    fn cpu_get_byte_zpgy() {
+        let mut cpu = new_test_cpu();
+        cpu.y = 0x00;
+        assert_eq!(0x10, cpu.get_byte_zpgy(0x00));
+        cpu.y = 0x03;
+        assert_eq!(0x13, cpu.get_byte_zpgy(0x00));
+        cpu.y = 0x00;
+        assert_eq!(0x2f, cpu.get_byte_zpgy(0xff));
+        cpu.y = 0x03;
+        assert_eq!(0x12, cpu.get_byte_zpgy(0xff));
+        cpu.y = 0xff;
+        assert_eq!(0x2f, cpu.get_byte_zpgy(0x00));
+    }
+
+    #[test]
+    fn cpu_get_byte_abs() {
+        let mut cpu = new_test_cpu();
+        assert_eq!(0xEA, cpu.get_byte_abs(0x0400));
+    }
+
+    #[test]
+    fn cpu_get_byte_absx() {
+        let mut cpu = new_test_cpu();
+        cpu.x = 0x03;
+        assert_eq!(0x05, cpu.get_byte_absx(0x0400));        
+    }
+
+    #[test]
+    fn cpu_get_byte_absy() {
+        let mut cpu = new_test_cpu();
+        cpu.y = 0x03;
+        assert_eq!(0x05, cpu.get_byte_absy(0x0400));        
+    }
+
+    #[test]
+    fn cpu_get_byte_xind() {
+        let mut cpu = new_test_cpu();
+        cpu.x = 3;
+        assert_eq!(0x02, cpu.get_byte_xind(0x10));
+    }
+
+    #[test]
+    fn cpu_get_byte_indy() {
+        let mut cpu = new_test_cpu();        
+        cpu.y = 3;
+        assert_eq!(0x60, cpu.get_byte_indy(0x13));
+    }
+
+    // Setters
+
+    #[test]
+    fn set_byte() {
+        let mut cpu = new_test_cpu();
+        cpu.set_byte(0x0400, 0x12);
+        assert_eq!(0x12, cpu.mem[0x0400]);
+    }
+
+    #[test]
+    fn cpu_set_byte_zpg() {
+        let mut cpu = new_test_cpu();
+        cpu.set_byte_zpg(0x42, 0x21);
+        assert_eq!(0x21, cpu.mem[0x0042]);
+    }
+
+    #[test]
+    fn cpu_set_byte_zpgx() {
+        let mut cpu = new_test_cpu();
+        cpu.x = 0;
+        cpu.set_byte_zpgx(0x42, 0x11);
+        assert_eq!(0x11, cpu.mem[0x0042]);
+        cpu.x = 1;
+        cpu.set_byte_zpgx(0x42, 0x22);
+        assert_eq!(0x22, cpu.mem[0x0043]);
+        cpu.x = 1;
+        cpu.set_byte_zpgx(0xff, 0x33);
+        assert_eq!(0x33, cpu.mem[0x0000]);
+        cpu.x = 3;
+        cpu.set_byte_zpgx(0xff, 0x44);
+        assert_eq!(0x44, cpu.mem[0x0002]);
+    }
+
+    #[test]
+    fn cpu_set_byte_zpgy() {
+        let mut cpu = new_test_cpu();
+        cpu.y = 0;
+        cpu.set_byte_zpgy(0x42, 0x11);
+        assert_eq!(0x11, cpu.mem[0x0042]);
+        cpu.y = 1;
+        cpu.set_byte_zpgy(0x42, 0x22);
+        assert_eq!(0x22, cpu.mem[0x0043]);
+        cpu.y = 1;
+        cpu.set_byte_zpgy(0xff, 0x33);
+        assert_eq!(0x33, cpu.mem[0x0000]);
+        cpu.y = 3;
+        cpu.set_byte_zpgy(0xff, 0x44);
+        assert_eq!(0x44, cpu.mem[0x0002]);
+    }
+
+    #[test]
+    fn cpu_set_byte_abs() {
+        let mut cpu = new_test_cpu();
+        cpu.set_byte_abs(0x0400, 0x12);
+        assert_eq!(0x12, cpu.mem[0x0400]);
+    }
+
+    #[test]
+    fn cpu_set_byte_absx() {
+        let mut cpu = new_test_cpu();
+        cpu.x = 3;
+        cpu.set_byte_absx(0x0400, 0x12);
+        assert_eq!(0x12, cpu.mem[0x0403]);
+    }
+
+    #[test]
+    fn cpu_set_byte_absy() {
+        let mut cpu = new_test_cpu();
+        cpu.y = 3;
+        cpu.set_byte_absy(0x0400, 0x12);
+        assert_eq!(0x12, cpu.mem[0x0403]);
+    }
+
+    #[test]
+    fn cpu_set_byte_xind() {
+        let mut cpu = new_test_cpu();
+        cpu.x = 3;
+        cpu.set_byte_xind(0x10, 0x42);
+        assert_eq!(0x42, cpu.get_byte_xind(0x10)); // TODO Ok to depend on get_byte_xind?
+    }
+
+    #[test]
+    fn cpu_set_byte_indy() {
+        let mut cpu = new_test_cpu();
+        cpu.y = 3;
+        cpu.set_byte_indy(0x13, 0x42);
+        assert_eq!(0x42, cpu.get_byte_indy(0x13));
     }
 }
