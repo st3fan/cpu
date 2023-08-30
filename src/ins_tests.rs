@@ -82,7 +82,7 @@ fn test_dey() {
     cpu.mem[0x0402] = 0x88; // DEY
     cpu.run();
     assert_eq!(0x11, cpu.y);
-    assert!(cpu.p.is_empty());    
+    assert!(cpu.p.is_empty());
 }
 
 #[test]
@@ -108,3 +108,14 @@ fn test_dey_n() {
     assert_eq!(cpu.p.contains(Status::Z), false);
     assert_eq!(cpu.p.contains(Status::N), true);
 }
+
+// #[test]
+// fn casting_u8_to_i16() {
+//     let a: u8 = 0xFE; // -2
+//     let b: i16 = a as i8 as i16;
+//     assert_eq!(b, -2);
+//     let mut pc: u16 = 0x0400;
+//     let t = pc as i16;
+//     pc = t.wrapping_add(b) as u16;
+//     assert_eq!(pc, 0x03FE);
+// }

@@ -479,6 +479,14 @@ impl CPU {
     //     todo!();
     // }
 
+    fn branch(&mut self, flag: Status, set: bool) {
+        let offset = (self.read_byte() as i8) as i16;
+        if self.p.contains(flag) == set {
+            let t = self.pc as i16;
+            self.pc = t.wrapping_add(offset) as u16;
+        }
+    }
+
     //
 
     fn run(&mut self) {
@@ -531,24 +539,24 @@ impl CPU {
                 0x0E => { self.mod_abs(Self::asl); }
                 0x1E => { self.mod_absx(Self::asl); }
 
-                // BCC
-                // BCS
-                // BEQ
-
                 0x24 => { self.mod_acc_zpg(Self::bit); }
                 0x2C => { self.mod_acc_abs(Self::bit); }
 
-                // BMI
-                // BNE
-                // BPL
+                /* BCC */ 0x90 => { self.branch(Status::C, false); }
+                /* BCS */ 0xB0 => { self.branch(Status::C, true); }
+                /* BMI */ 0x30 => { self.branch(Status::N, true); }
+                /* BNE */ 0xD0 => { self.branch(Status::Z, false); }
+                /* BEQ */ 0xF0 => { self.branch(Status::Z, true); }
+                /* BPL */ 0x10 => { self.branch(Status::N, false); }
+                /* BVC */ 0x50 => { self.branch(Status::C, false); }
+                /* BVS */ 0x70 => { self.branch(Status::C, true); }
+                
                 // BRK
-                // BVC
-
-                // CLC
-
-                // CLD
-
-                // CLI
+                
+                /* CLC */ 0x18 => { self.p.set(Status::C, false); }
+                /* CLD */ 0xD8 => { self.p.set(Status::D, false); }
+                /* CLI */ 0x58 => { self.p.set(Status::I, false); }
+                /* CLV */ 0xB8 => { self.p.set(Status::V, false); }
 
                 0xC9 => { self.mod_acc_imm(Self::cmp); }
                 0xC5 => { self.mod_acc_zpg(Self::cmp); }
@@ -675,11 +683,9 @@ impl CPU {
                 0xE1 => { self.mod_acc_xind(Self::sbc); }
                 0xF1 => { self.mod_acc_indy(Self::sbc); }
 
-                // SEC
-
-                // SED
-
-                // SEI
+                /* SEC */ 0x38 => { self.p.set(Status::C, true); }
+                /* SED */ 0xF8 => { self.p.set(Status::D, true); }
+                /* SEI */ 0x78 => { self.p.set(Status::I, true); }
 
                 0x85 => { self.set_mem_zpg(Self::sta); }
                 0x95 => { self.set_mem_zpgx(Self::sta); }
