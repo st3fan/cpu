@@ -605,8 +605,16 @@ impl CPU {
                 0xFE => { self.mod_absx(Self::inc); }
 
                 // INX
+                0xE8 => {
+                    self.x = self.x.wrapping_add(1);
+                    self.update_zn(self.x);
+                }
 
                 // INY
+                0xC8 => {
+                    self.y = self.y.wrapping_add(1);
+                    self.update_zn(self.y);
+                }
 
                 // JMP
 
@@ -649,14 +657,11 @@ impl CPU {
                 0x19 => { self.mod_acc_absy(Self::ora); }
                 0x01 => { self.mod_acc_xind(Self::ora); }
                 0x11 => { self.mod_acc_indy(Self::ora); }
-
-                // PHA
-
-                // PHP
-
-                // PLA
-
-                // PLP
+                
+                /* PHA */ 0x48 => { self.push_byte(self.a); }
+                /* PHP */ 0x08 => { self.push_byte(self.p.bits()); }
+                /* PLA */ 0x68 => { self.a = self.pop_byte(); }
+                /* PLP */ 0x28 => { self.p = Status::from_bits_retain(self.pop_byte() & 0b11001111); }
 
                 0x2A => { self.mod_acc(Self::rol); }
                 0x26 => { self.mod_zpg(Self::rol); }
