@@ -14,6 +14,7 @@ use bitflags::bitflags;
 //
 
 bitflags! {
+    #[derive(Clone)]
     pub struct Status: u8 {
         const N = 0b10000000;
         const V = 0b01000000;
@@ -494,17 +495,21 @@ impl CPU {
             let opcode = self.read_byte();
 
             match opcode {
+                // BRK
                 0x00 => {
-                    // BRK
+                    self.push_word(self.pc + 2);
+                    self.p.set(Status::I, true);
+                    self.push_byte(self.p.bits());
                     return;
                 }
 
+                // JSR ABS
                 0x20 => {
-                    // JSR ABS
                     self.push_word(self.pc + 2);
                     self.pc = self.read_word();
                 }
 
+                // RTS
                 0x60 => {
                     self.pc = self.pop_word();
                 }
@@ -512,8 +517,6 @@ impl CPU {
                 // NOP
                 0xEA => {
                 }
-
-                // Remove above
 
                 0x69 => { self.mod_acc_imm(Self::adc); }
                 0x65 => { self.mod_acc_zpg(Self::adc); }
@@ -550,9 +553,7 @@ impl CPU {
                 /* BPL */ 0x10 => { self.branch(Status::N, false); }
                 /* BVC */ 0x50 => { self.branch(Status::C, false); }
                 /* BVS */ 0x70 => { self.branch(Status::C, true); }
-                
-                // BRK
-                
+                                
                 /* CLC */ 0x18 => { self.p.set(Status::C, false); }
                 /* CLD */ 0xD8 => { self.p.set(Status::D, false); }
                 /* CLI */ 0x58 => { self.p.set(Status::I, false); }
@@ -580,15 +581,8 @@ impl CPU {
                 0xCE => { self.mod_abs(Self::dec); }
                 0xDE => { self.mod_absx(Self::dec); }
 
-                0xCA => { // DEX
-                    self.x = self.x.wrapping_sub(1);
-                    self.update_zn(self.x);
-                }
-
-                0x88 => { // DEY
-                    self.y = self.y.wrapping_sub(1);
-                    self.update_zn(self.y);
-                }
+                /* DEX */ 0xCA => { self.x = self.x.wrapping_sub(1); self.update_zn(self.x); }
+                /* DEY */ 0x88 => { self.y = self.y.wrapping_sub(1); self.update_zn(self.y); }
 
                 0x49 => { self.mod_acc_imm(Self::eor); }
                 0x45 => { self.mod_acc_zpg(Self::eor); }
@@ -604,19 +598,14 @@ impl CPU {
                 0xEE => { self.mod_abs(Self::inc); }
                 0xFE => { self.mod_absx(Self::inc); }
 
-                // INX
-                0xE8 => {
-                    self.x = self.x.wrapping_add(1);
-                    self.update_zn(self.x);
-                }
-
-                // INY
-                0xC8 => {
-                    self.y = self.y.wrapping_add(1);
-                    self.update_zn(self.y);
-                }
+                /* INX */ 0xE8 => { self.x = self.x.wrapping_add(1); self.update_zn(self.x); }
+                /* INY */ 0xC8 => { self.y = self.y.wrapping_add(1); self.update_zn(self.y); }
 
                 // JMP
+                0x4C => { self.pc = self.read_word(); }
+
+                // JMP (IND)
+                0x6C => { let address = self.read_word(); self.pc = self.get_word(address); }
 
                 // JSR
 
@@ -675,9 +664,7 @@ impl CPU {
                 0x6E => { self.mod_abs(Self::ror); }
                 0x7E => { self.mod_absx(Self::ror); }
 
-                // RTI
-
-                // RTS
+                // TODO RTI
 
                 0xE9 => { self.mod_acc_imm(Self::sbc); }
                 0xE5 => { self.mod_acc_zpg(Self::sbc); }
@@ -708,17 +695,12 @@ impl CPU {
                 0x94 => { self.set_mem_zpgx(Self::sty); }
                 0x8C => { self.set_mem_abs(Self::sty); }
 
-                // TAX
-
-                // TAY
-
-                // TSX
-
-                // TXA
-
-                // TXS
-
-                // TYA
+                /* TAX */ 0xAA => { self.x = self.a; self.update_zn(self.x); }
+                /* TAY */ 0xA8 => { self.y = self.a; self.update_zn(self.y); }
+                /* TXA */ 0x8A => { self.a = self.x; self.update_zn(self.a); }
+                /* TYA */ 0x98 => { self.a = self.y; self.update_zn(self.a); }
+                /* TXS */ 0x9A => { self.s = self.x; }
+                /* TSX */ 0xBA => { self.x = self.s; self.update_zn(self.x); }
 
                 _ => {
                     panic!("Unknown instruction {}", opcode)
