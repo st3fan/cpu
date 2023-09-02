@@ -6,7 +6,8 @@ fn lda_imm() {
     cpu.mem[0x0400] = 0xA9; // LDX #$42
     cpu.mem[0x0401] = 0x42;
     cpu.mem[0x0402] = 0x00;
-    cpu.run();
+    cpu.mem[0x0403] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x42, cpu.a);
 }
 
@@ -16,7 +17,9 @@ fn sta_zp() {
     cpu.a = 0x42;
     cpu.mem[0x0400] = 0x85; // STA $07
     cpu.mem[0x0401] = 0x07;
-    cpu.run();
+    cpu.mem[0x0402] = 0xFF;
+    cpu.mem[0x0403] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x42, cpu.mem[0x07]);
 }
 
@@ -25,7 +28,8 @@ fn ldx_imm() {
     let mut cpu = CPU::new();
     cpu.mem[0x0400] = 0xA2; // LDX #$65
     cpu.mem[0x0401] = 0x65;
-    cpu.run();
+    cpu.mem[0x0402] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x65, cpu.x);
 }
 
@@ -35,7 +39,8 @@ fn stx_zp() {
     cpu.x = 0x42;
     cpu.mem[0x0400] = 0x86; // STX $07
     cpu.mem[0x0401] = 0x07;
-    cpu.run();
+    cpu.mem[0x0402] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x42, cpu.mem[0x07]);
 }
 
@@ -45,7 +50,8 @@ fn test_dex() {
     cpu.mem[0x0400] = 0xA2; // LDX #$12
     cpu.mem[0x0401] = 0x12;
     cpu.mem[0x0402] = 0xCA; // DEX
-    cpu.run();
+    cpu.mem[0x0403] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x11, cpu.x);
     assert!(cpu.p.is_empty());    
 }
@@ -56,7 +62,8 @@ fn test_dex_z() {
     cpu.mem[0x0400] = 0xA2; // LDX #$12
     cpu.mem[0x0401] = 0x01;
     cpu.mem[0x0402] = 0xCA; // DEX
-    cpu.run();
+    cpu.mem[0x0403] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x00, cpu.x);
     assert_eq!(cpu.p.contains(Status::Z), true);    
     assert_eq!(cpu.p.contains(Status::N), false);
@@ -68,7 +75,8 @@ fn test_dex_n() {
     cpu.mem[0x0400] = 0xA2; // LDX #$12
     cpu.mem[0x0401] = 0x88;
     cpu.mem[0x0402] = 0xCA; // DEX
-    cpu.run();
+    cpu.mem[0x0403] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x87, cpu.x);
     assert_eq!(cpu.p.contains(Status::Z), false);
     assert_eq!(cpu.p.contains(Status::N), true);
@@ -80,7 +88,8 @@ fn test_dey() {
     cpu.mem[0x0400] = 0xA0; // LDY #$12
     cpu.mem[0x0401] = 0x12;
     cpu.mem[0x0402] = 0x88; // DEY
-    cpu.run();
+    cpu.mem[0x0403] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x11, cpu.y);
     assert!(cpu.p.is_empty());
 }
@@ -91,7 +100,8 @@ fn test_dey_z() {
     cpu.mem[0x0400] = 0xA0; // LDY #$12
     cpu.mem[0x0401] = 0x01;
     cpu.mem[0x0402] = 0x88; // DEX
-    cpu.run();
+    cpu.mem[0x0403] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x00, cpu.y);
     assert_eq!(cpu.p.contains(Status::Z), true);    
     assert_eq!(cpu.p.contains(Status::N), false);
@@ -103,7 +113,8 @@ fn test_dey_n() {
     cpu.mem[0x0400] = 0xA0; // LDY #$12
     cpu.mem[0x0401] = 0x88;
     cpu.mem[0x0402] = 0x88; // DEY
-    cpu.run();
+    cpu.mem[0x0403] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x87, cpu.y);
     assert_eq!(cpu.p.contains(Status::Z), false);
     assert_eq!(cpu.p.contains(Status::N), true);

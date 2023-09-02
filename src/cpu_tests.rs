@@ -27,9 +27,8 @@ fn load_and_store() {
     cpu.mem[0x0401] = 0x42;
     cpu.mem[0x0402] = 0x85; // STA $07
     cpu.mem[0x0403] = 0x07;
-    cpu.mem[0x0404] = 0x00; // BRK
-    cpu.run();
-    assert_eq!(0x0405, cpu.pc);
+    cpu.mem[0x0405] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x42, cpu.a);
     assert_eq!(0x42, cpu.mem[0x0007]);
 }
@@ -67,7 +66,7 @@ fn call_and_return() {
     cpu.mem[0x0401] = 0x20; // JSR 0x0405
     cpu.mem[0x0402] = 0x05;
     cpu.mem[0x0403] = 0x04;
-    cpu.mem[0x0004] = 0x00; // BRK
+    cpu.mem[0x0404] = 0xFF; // So we exit with CPUError::IllegalInstruction
     cpu.mem[0x0405] = 0xA2; // LDX #$65
     cpu.mem[0x0406] = 0x65;
     cpu.mem[0x0407] = 0x86; // STX $05
@@ -77,7 +76,7 @@ fn call_and_return() {
     cpu.mem[0x040B] = 0x86; // STX $06
     cpu.mem[0x040C] = 0x06;
     cpu.mem[0x040D] = 0x60; // RTS
-    cpu.run();
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert_eq!(0x65, cpu.mem[0x0005]);
     assert_eq!(0x02, cpu.mem[0x0006]);
 }
@@ -87,13 +86,13 @@ fn n_is_set() {
     let mut cpu = CPU::new();
     cpu.mem[0x0400] = 0xA9; // LDA #$80
     cpu.mem[0x0401] = 0x80;
-    cpu.mem[0x0402] = 0x00;
-    cpu.run();
+    cpu.mem[0x0402] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert!(cpu.p.contains(Status::N));
     cpu.mem[0x0403] = 0xA9; // LDA #$7F
     cpu.mem[0x0404] = 0x7F;
-    cpu.mem[0x0405] = 0x00;
-    cpu.run();
+    cpu.mem[0x0405] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert!(!cpu.p.contains(Status::N));
 }
 
@@ -102,12 +101,12 @@ fn z_is_set() {
     let mut cpu = CPU::new();
     cpu.mem[0x0400] = 0xA9; // LDA #$00
     cpu.mem[0x0401] = 0x00;
-    cpu.mem[0x0402] = 0x00;
-    cpu.run();
+    cpu.mem[0x0402] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert!(cpu.p.contains(Status::Z));
     cpu.mem[0x0403] = 0xA9; // LDA #$01
     cpu.mem[0x0404] = 0x01;
-    cpu.mem[0x0405] = 0x00;
-    cpu.run();
+    cpu.mem[0x0405] = 0xFF; // So we exit with CPUError::IllegalInstruction
+    assert_eq!(cpu.run(), Err(CPUError::IllegalInstruction));
     assert!(!cpu.p.contains(Status::N));
 }

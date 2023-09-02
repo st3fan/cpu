@@ -4,6 +4,11 @@
 
 use bitflags::bitflags;
 
+#[derive(Debug, PartialEq)]
+enum CPUError {
+    IllegalInstruction,
+}
+
 //
 // This is a 6502 emulator with the following memory layout:
 //
@@ -490,223 +495,227 @@ impl CPU {
 
     //
 
-    fn run(&mut self) {
-        loop {
-            let opcode = self.read_byte();
+    /// Call step until it fails or hits a breakpoint.
+    pub fn run(&mut self) -> Result<(), CPUError> {
+        loop { self.step()?; }
+    }
 
-            match opcode {
-                // BRK
-                0x00 => {
-                    self.push_word(self.pc + 2);
-                    self.p.set(Status::I, true);
-                    self.push_byte(self.p.bits());
-                    return;
-                }
+    /// Step one instruction.
+    pub fn step(&mut self) -> Result<(), CPUError> {
+        let opcode = self.read_byte();
+        match opcode {
+            // BRK
+            0x00 => {
+                self.push_word(self.pc + 2);
+                self.p.set(Status::I, true);
+                self.push_byte(self.p.bits());
+            }
 
-                // JSR ABS
-                0x20 => {
-                    self.push_word(self.pc + 2);
-                    self.pc = self.read_word();
-                }
+            // JSR ABS
+            0x20 => {
+                self.push_word(self.pc + 2);
+                self.pc = self.read_word();
+            }
 
-                // RTS
-                0x60 => {
-                    self.pc = self.pop_word();
-                }
+            // RTS
+            0x60 => {
+                self.pc = self.pop_word();
+            }
 
-                // NOP
-                0xEA => {
-                }
+            // NOP
+            0xEA => {
+            }
 
-                0x69 => { self.mod_acc_imm(Self::adc); }
-                0x65 => { self.mod_acc_zpg(Self::adc); }
-                0x75 => { self.mod_acc_zpgx(Self::adc); }
-                0x6D => { self.mod_acc_zpgy(Self::adc); }
-                0x7D => { self.mod_acc_absx(Self::adc); }
-                0x79 => { self.mod_acc_absy(Self::adc); }
-                0x61 => { self.mod_acc_xind(Self::adc); }
-                0x71 => { self.mod_acc_indy(Self::adc); }        
+            0x69 => { self.mod_acc_imm(Self::adc); }
+            0x65 => { self.mod_acc_zpg(Self::adc); }
+            0x75 => { self.mod_acc_zpgx(Self::adc); }
+            0x6D => { self.mod_acc_zpgy(Self::adc); }
+            0x7D => { self.mod_acc_absx(Self::adc); }
+            0x79 => { self.mod_acc_absy(Self::adc); }
+            0x61 => { self.mod_acc_xind(Self::adc); }
+            0x71 => { self.mod_acc_indy(Self::adc); }        
 
-                0x29 => { self.mod_acc_imm(Self::and); }
-                0x25 => { self.mod_acc_zpg(Self::and); }
-                0x35 => { self.mod_acc_zpgx(Self::and); }
-                0x2D => { self.mod_acc_zpgy(Self::and); }
-                0x3D => { self.mod_acc_absx(Self::and); }
-                0x39 => { self.mod_acc_absy(Self::and); }
-                0x21 => { self.mod_acc_xind(Self::and); }
-                0x31 => { self.mod_acc_indy(Self::and); }        
+            0x29 => { self.mod_acc_imm(Self::and); }
+            0x25 => { self.mod_acc_zpg(Self::and); }
+            0x35 => { self.mod_acc_zpgx(Self::and); }
+            0x2D => { self.mod_acc_zpgy(Self::and); }
+            0x3D => { self.mod_acc_absx(Self::and); }
+            0x39 => { self.mod_acc_absy(Self::and); }
+            0x21 => { self.mod_acc_xind(Self::and); }
+            0x31 => { self.mod_acc_indy(Self::and); }        
 
-                0x0A => { self.mod_acc(Self::asl); }
-                0x06 => { self.mod_zpg(Self::asl); }
-                0x16 => { self.mod_zpgx(Self::asl); }
-                0x0E => { self.mod_abs(Self::asl); }
-                0x1E => { self.mod_absx(Self::asl); }
+            0x0A => { self.mod_acc(Self::asl); }
+            0x06 => { self.mod_zpg(Self::asl); }
+            0x16 => { self.mod_zpgx(Self::asl); }
+            0x0E => { self.mod_abs(Self::asl); }
+            0x1E => { self.mod_absx(Self::asl); }
 
-                0x24 => { self.mod_acc_zpg(Self::bit); }
-                0x2C => { self.mod_acc_abs(Self::bit); }
+            0x24 => { self.mod_acc_zpg(Self::bit); }
+            0x2C => { self.mod_acc_abs(Self::bit); }
 
-                /* BCC */ 0x90 => { self.branch(Status::C, false); }
-                /* BCS */ 0xB0 => { self.branch(Status::C, true); }
-                /* BMI */ 0x30 => { self.branch(Status::N, true); }
-                /* BNE */ 0xD0 => { self.branch(Status::Z, false); }
-                /* BEQ */ 0xF0 => { self.branch(Status::Z, true); }
-                /* BPL */ 0x10 => { self.branch(Status::N, false); }
-                /* BVC */ 0x50 => { self.branch(Status::C, false); }
-                /* BVS */ 0x70 => { self.branch(Status::C, true); }
-                                
-                /* CLC */ 0x18 => { self.p.set(Status::C, false); }
-                /* CLD */ 0xD8 => { self.p.set(Status::D, false); }
-                /* CLI */ 0x58 => { self.p.set(Status::I, false); }
-                /* CLV */ 0xB8 => { self.p.set(Status::V, false); }
+            /* BCC */ 0x90 => { self.branch(Status::C, false); }
+            /* BCS */ 0xB0 => { self.branch(Status::C, true); }
+            /* BMI */ 0x30 => { self.branch(Status::N, true); }
+            /* BNE */ 0xD0 => { self.branch(Status::Z, false); }
+            /* BEQ */ 0xF0 => { self.branch(Status::Z, true); }
+            /* BPL */ 0x10 => { self.branch(Status::N, false); }
+            /* BVC */ 0x50 => { self.branch(Status::C, false); }
+            /* BVS */ 0x70 => { self.branch(Status::C, true); }
+                            
+            /* CLC */ 0x18 => { self.p.set(Status::C, false); }
+            /* CLD */ 0xD8 => { self.p.set(Status::D, false); }
+            /* CLI */ 0x58 => { self.p.set(Status::I, false); }
+            /* CLV */ 0xB8 => { self.p.set(Status::V, false); }
 
-                0xC9 => { self.mod_acc_imm(Self::cmp); }
-                0xC5 => { self.mod_acc_zpg(Self::cmp); }
-                0xD5 => { self.mod_acc_zpgx(Self::cmp); }
-                0xCD => { self.mod_acc_abs(Self::cmp); }
-                0xDD => { self.mod_acc_absx(Self::cmp); }
-                0xD9 => { self.mod_acc_absy(Self::cmp); }
-                0xC1 => { self.mod_acc_xind(Self::cmp); }
-                0xD1 => { self.mod_acc_indy(Self::cmp); }
+            0xC9 => { self.mod_acc_imm(Self::cmp); }
+            0xC5 => { self.mod_acc_zpg(Self::cmp); }
+            0xD5 => { self.mod_acc_zpgx(Self::cmp); }
+            0xCD => { self.mod_acc_abs(Self::cmp); }
+            0xDD => { self.mod_acc_absx(Self::cmp); }
+            0xD9 => { self.mod_acc_absy(Self::cmp); }
+            0xC1 => { self.mod_acc_xind(Self::cmp); }
+            0xD1 => { self.mod_acc_indy(Self::cmp); }
 
-                0xE0 => { self.mod_acc_imm(Self::cpx); }
-                0xE4 => { self.mod_acc_zpg(Self::cpx); }
-                0xEC => { self.mod_acc_abs(Self::cpx); }
+            0xE0 => { self.mod_acc_imm(Self::cpx); }
+            0xE4 => { self.mod_acc_zpg(Self::cpx); }
+            0xEC => { self.mod_acc_abs(Self::cpx); }
 
-                0xC0 => { self.mod_acc_imm(Self::cpy); }
-                0xC4 => { self.mod_acc_zpg(Self::cpy); }
-                0xCC => { self.mod_acc_abs(Self::cpy); }
+            0xC0 => { self.mod_acc_imm(Self::cpy); }
+            0xC4 => { self.mod_acc_zpg(Self::cpy); }
+            0xCC => { self.mod_acc_abs(Self::cpy); }
 
-                0xD6 => { self.mod_zpgx(Self::dec); }
-                0xC6 => { self.mod_zpg(Self::dec); }
-                0xCE => { self.mod_abs(Self::dec); }
-                0xDE => { self.mod_absx(Self::dec); }
+            0xD6 => { self.mod_zpgx(Self::dec); }
+            0xC6 => { self.mod_zpg(Self::dec); }
+            0xCE => { self.mod_abs(Self::dec); }
+            0xDE => { self.mod_absx(Self::dec); }
 
-                /* DEX */ 0xCA => { self.x = self.x.wrapping_sub(1); self.update_zn(self.x); }
-                /* DEY */ 0x88 => { self.y = self.y.wrapping_sub(1); self.update_zn(self.y); }
+            /* DEX */ 0xCA => { self.x = self.x.wrapping_sub(1); self.update_zn(self.x); }
+            /* DEY */ 0x88 => { self.y = self.y.wrapping_sub(1); self.update_zn(self.y); }
 
-                0x49 => { self.mod_acc_imm(Self::eor); }
-                0x45 => { self.mod_acc_zpg(Self::eor); }
-                0x55 => { self.mod_acc_zpgx(Self::eor); }
-                0x4D => { self.mod_acc_zpgy(Self::eor); }
-                0x5D => { self.mod_acc_absx(Self::eor); }
-                0x59 => { self.mod_acc_absy(Self::eor); }
-                0x41 => { self.mod_acc_xind(Self::eor); }
-                0x51 => { self.mod_acc_indy(Self::eor); }        
+            0x49 => { self.mod_acc_imm(Self::eor); }
+            0x45 => { self.mod_acc_zpg(Self::eor); }
+            0x55 => { self.mod_acc_zpgx(Self::eor); }
+            0x4D => { self.mod_acc_zpgy(Self::eor); }
+            0x5D => { self.mod_acc_absx(Self::eor); }
+            0x59 => { self.mod_acc_absy(Self::eor); }
+            0x41 => { self.mod_acc_xind(Self::eor); }
+            0x51 => { self.mod_acc_indy(Self::eor); }        
 
-                0xE6 => { self.mod_zpg(Self::inc); }
-                0xF6 => { self.mod_zpgx(Self::inc); }
-                0xEE => { self.mod_abs(Self::inc); }
-                0xFE => { self.mod_absx(Self::inc); }
+            0xE6 => { self.mod_zpg(Self::inc); }
+            0xF6 => { self.mod_zpgx(Self::inc); }
+            0xEE => { self.mod_abs(Self::inc); }
+            0xFE => { self.mod_absx(Self::inc); }
 
-                /* INX */ 0xE8 => { self.x = self.x.wrapping_add(1); self.update_zn(self.x); }
-                /* INY */ 0xC8 => { self.y = self.y.wrapping_add(1); self.update_zn(self.y); }
+            /* INX */ 0xE8 => { self.x = self.x.wrapping_add(1); self.update_zn(self.x); }
+            /* INY */ 0xC8 => { self.y = self.y.wrapping_add(1); self.update_zn(self.y); }
 
-                // JMP
-                0x4C => { self.pc = self.read_word(); }
+            // JMP
+            0x4C => { self.pc = self.read_word(); }
 
-                // JMP (IND)
-                0x6C => { let address = self.read_word(); self.pc = self.get_word(address); }
+            // JMP (IND)
+            0x6C => { let address = self.read_word(); self.pc = self.get_word(address); }
 
-                // JSR
+            // JSR
 
-                0xA9 => { self.mod_acc_imm(Self::lda); }
-                0xA5 => { self.mod_acc_zpg(Self::lda); }
-                0xB5 => { self.mod_acc_zpgx(Self::lda); }
-                0xAD => { self.mod_acc_zpgy(Self::lda); }
-                0xBD => { self.mod_acc_absx(Self::lda); }
-                0xB9 => { self.mod_acc_absy(Self::lda); }
-                0xA1 => { self.mod_acc_xind(Self::lda); }
-                0xB1 => { self.mod_acc_indy(Self::lda); }        
+            0xA9 => { self.mod_acc_imm(Self::lda); }
+            0xA5 => { self.mod_acc_zpg(Self::lda); }
+            0xB5 => { self.mod_acc_zpgx(Self::lda); }
+            0xAD => { self.mod_acc_zpgy(Self::lda); }
+            0xBD => { self.mod_acc_absx(Self::lda); }
+            0xB9 => { self.mod_acc_absy(Self::lda); }
+            0xA1 => { self.mod_acc_xind(Self::lda); }
+            0xB1 => { self.mod_acc_indy(Self::lda); }        
 
-                0xA2 => { self.mod_acc_imm(Self::ldx); }
-                0xA6 => { self.mod_acc_zpg(Self::ldx); }
-                0xB6 => { self.mod_acc_zpgy(Self::ldx); }
-                0xAE => { self.mod_acc_abs(Self::ldx); }
-                0xBE => { self.mod_acc_absy(Self::ldx); }
+            0xA2 => { self.mod_acc_imm(Self::ldx); }
+            0xA6 => { self.mod_acc_zpg(Self::ldx); }
+            0xB6 => { self.mod_acc_zpgy(Self::ldx); }
+            0xAE => { self.mod_acc_abs(Self::ldx); }
+            0xBE => { self.mod_acc_absy(Self::ldx); }
 
-                0xA0 => { self.mod_acc_imm(Self::ldy); }
-                0xA4 => { self.mod_acc_zpg(Self::ldy); }
-                0xB4 => { self.mod_acc_zpgx(Self::ldy); }
-                0xAC => { self.mod_acc_abs(Self::ldy); }
-                0xBC => { self.mod_acc_absx(Self::ldy); }
+            0xA0 => { self.mod_acc_imm(Self::ldy); }
+            0xA4 => { self.mod_acc_zpg(Self::ldy); }
+            0xB4 => { self.mod_acc_zpgx(Self::ldy); }
+            0xAC => { self.mod_acc_abs(Self::ldy); }
+            0xBC => { self.mod_acc_absx(Self::ldy); }
 
-                0x4A => { self.mod_acc(Self::lsr); }
-                0x46 => { self.mod_zpg(Self::lsr); }
-                0x56 => { self.mod_zpgx(Self::lsr); }
-                0x4E => { self.mod_abs(Self::lsr); }
-                0x5E => { self.mod_absx(Self::lsr); }
+            0x4A => { self.mod_acc(Self::lsr); }
+            0x46 => { self.mod_zpg(Self::lsr); }
+            0x56 => { self.mod_zpgx(Self::lsr); }
+            0x4E => { self.mod_abs(Self::lsr); }
+            0x5E => { self.mod_absx(Self::lsr); }
 
-                // NOP
+            // NOP
 
-                0x09 => { self.mod_acc_imm(Self::ora); }
-                0x05 => { self.mod_acc_zpg(Self::ora); }
-                0x15 => { self.mod_acc_zpgx(Self::ora); }
-                0x0D => { self.mod_acc_zpgy(Self::ora); }
-                0x1D => { self.mod_acc_absx(Self::ora); }
-                0x19 => { self.mod_acc_absy(Self::ora); }
-                0x01 => { self.mod_acc_xind(Self::ora); }
-                0x11 => { self.mod_acc_indy(Self::ora); }
-                
-                /* PHA */ 0x48 => { self.push_byte(self.a); }
-                /* PHP */ 0x08 => { self.push_byte(self.p.bits()); }
-                /* PLA */ 0x68 => { self.a = self.pop_byte(); }
-                /* PLP */ 0x28 => { self.p = Status::from_bits_retain(self.pop_byte() & 0b11001111); }
+            0x09 => { self.mod_acc_imm(Self::ora); }
+            0x05 => { self.mod_acc_zpg(Self::ora); }
+            0x15 => { self.mod_acc_zpgx(Self::ora); }
+            0x0D => { self.mod_acc_zpgy(Self::ora); }
+            0x1D => { self.mod_acc_absx(Self::ora); }
+            0x19 => { self.mod_acc_absy(Self::ora); }
+            0x01 => { self.mod_acc_xind(Self::ora); }
+            0x11 => { self.mod_acc_indy(Self::ora); }
+            
+            /* PHA */ 0x48 => { self.push_byte(self.a); }
+            /* PHP */ 0x08 => { self.push_byte(self.p.bits()); }
+            /* PLA */ 0x68 => { self.a = self.pop_byte(); }
+            /* PLP */ 0x28 => { self.p = Status::from_bits_retain(self.pop_byte() & 0b11001111); }
 
-                0x2A => { self.mod_acc(Self::rol); }
-                0x26 => { self.mod_zpg(Self::rol); }
-                0x36 => { self.mod_zpgx(Self::rol); }
-                0x2E => { self.mod_abs(Self::rol); }
-                0x3E => { self.mod_absx(Self::rol); }
+            0x2A => { self.mod_acc(Self::rol); }
+            0x26 => { self.mod_zpg(Self::rol); }
+            0x36 => { self.mod_zpgx(Self::rol); }
+            0x2E => { self.mod_abs(Self::rol); }
+            0x3E => { self.mod_absx(Self::rol); }
 
-                0x6A => { self.mod_acc(Self::ror); }
-                0x66 => { self.mod_zpg(Self::ror); }
-                0x76 => { self.mod_zpgx(Self::ror); }
-                0x6E => { self.mod_abs(Self::ror); }
-                0x7E => { self.mod_absx(Self::ror); }
+            0x6A => { self.mod_acc(Self::ror); }
+            0x66 => { self.mod_zpg(Self::ror); }
+            0x76 => { self.mod_zpgx(Self::ror); }
+            0x6E => { self.mod_abs(Self::ror); }
+            0x7E => { self.mod_absx(Self::ror); }
 
-                // TODO RTI
+            // TODO RTI
 
-                0xE9 => { self.mod_acc_imm(Self::sbc); }
-                0xE5 => { self.mod_acc_zpg(Self::sbc); }
-                0xF5 => { self.mod_acc_zpgx(Self::sbc); }
-                0xED => { self.mod_acc_zpgy(Self::sbc); }
-                0xFD => { self.mod_acc_absx(Self::sbc); }
-                0xF9 => { self.mod_acc_absy(Self::sbc); }
-                0xE1 => { self.mod_acc_xind(Self::sbc); }
-                0xF1 => { self.mod_acc_indy(Self::sbc); }
+            0xE9 => { self.mod_acc_imm(Self::sbc); }
+            0xE5 => { self.mod_acc_zpg(Self::sbc); }
+            0xF5 => { self.mod_acc_zpgx(Self::sbc); }
+            0xED => { self.mod_acc_zpgy(Self::sbc); }
+            0xFD => { self.mod_acc_absx(Self::sbc); }
+            0xF9 => { self.mod_acc_absy(Self::sbc); }
+            0xE1 => { self.mod_acc_xind(Self::sbc); }
+            0xF1 => { self.mod_acc_indy(Self::sbc); }
 
-                /* SEC */ 0x38 => { self.p.set(Status::C, true); }
-                /* SED */ 0xF8 => { self.p.set(Status::D, true); }
-                /* SEI */ 0x78 => { self.p.set(Status::I, true); }
+            /* SEC */ 0x38 => { self.p.set(Status::C, true); }
+            /* SED */ 0xF8 => { self.p.set(Status::D, true); }
+            /* SEI */ 0x78 => { self.p.set(Status::I, true); }
 
-                0x85 => { self.set_mem_zpg(Self::sta); }
-                0x95 => { self.set_mem_zpgx(Self::sta); }
-                0x8D => { self.set_mem_abs(Self::sta); }
-                0x9D => { self.set_mem_absx(Self::sta); }
-                0x99 => { self.set_mem_absy(Self::sta); }
-                0x81 => { self.set_mem_xind(Self::sta); }
-                0x91 => { self.set_mem_indy(Self::sta); }
+            0x85 => { self.set_mem_zpg(Self::sta); }
+            0x95 => { self.set_mem_zpgx(Self::sta); }
+            0x8D => { self.set_mem_abs(Self::sta); }
+            0x9D => { self.set_mem_absx(Self::sta); }
+            0x99 => { self.set_mem_absy(Self::sta); }
+            0x81 => { self.set_mem_xind(Self::sta); }
+            0x91 => { self.set_mem_indy(Self::sta); }
 
-                0x96 => { self.set_mem_zpg(Self::stx); }
-                0x86 => { self.set_mem_zpgy(Self::stx); }
-                0x8E => { self.set_mem_abs(Self::stx); }
+            0x96 => { self.set_mem_zpg(Self::stx); }
+            0x86 => { self.set_mem_zpgy(Self::stx); }
+            0x8E => { self.set_mem_abs(Self::stx); }
 
-                0x84 => { self.set_mem_zpg(Self::sty); }
-                0x94 => { self.set_mem_zpgx(Self::sty); }
-                0x8C => { self.set_mem_abs(Self::sty); }
+            0x84 => { self.set_mem_zpg(Self::sty); }
+            0x94 => { self.set_mem_zpgx(Self::sty); }
+            0x8C => { self.set_mem_abs(Self::sty); }
 
-                /* TAX */ 0xAA => { self.x = self.a; self.update_zn(self.x); }
-                /* TAY */ 0xA8 => { self.y = self.a; self.update_zn(self.y); }
-                /* TXA */ 0x8A => { self.a = self.x; self.update_zn(self.a); }
-                /* TYA */ 0x98 => { self.a = self.y; self.update_zn(self.a); }
-                /* TXS */ 0x9A => { self.s = self.x; }
-                /* TSX */ 0xBA => { self.x = self.s; self.update_zn(self.x); }
+            /* TAX */ 0xAA => { self.x = self.a; self.update_zn(self.x); }
+            /* TAY */ 0xA8 => { self.y = self.a; self.update_zn(self.y); }
+            /* TXA */ 0x8A => { self.a = self.x; self.update_zn(self.a); }
+            /* TYA */ 0x98 => { self.a = self.y; self.update_zn(self.a); }
+            /* TXS */ 0x9A => { self.s = self.x; }
+            /* TSX */ 0xBA => { self.x = self.s; self.update_zn(self.x); }
 
-                _ => {
-                    panic!("Unknown instruction {}", opcode)
-                }
+            _ => {
+                return Err(CPUError::IllegalInstruction)
             }
         }
+
+        Ok(())
     }
 }
 
